@@ -166,6 +166,27 @@ class Environment(object):
         self._sources.append(child)
         return child_set
 
+    def from_db(self, query_sql, row_types, db_config):
+        """
+        Creates a new data set from table in a database by jdbc
+
+        :param query_sql: select query sql
+        :param db_config: a list or tuple, including string of drive, url, user, password
+        :param row_types: a java type string split by comma, e.g. String,Date
+        :return: A DataSet representing the query result set.
+        """
+        if not isinstance(db_config, (tuple, list)) or len(db_config) < 4:
+            raise TypeError("db_config must be tuple or list, and contains drive, url, user, password")
+        config = db_config.copy()
+        config.append(query_sql)
+        config.append(row_types)
+        child = OperationInfo()
+        child_set = DataSet(self, child)
+        child.identifier = _Identifier.SOURCE_JDBC
+        child.values = config
+        self._sources.append(child)
+        return child_set
+
     def generate_sequence(self, frm, to):
         """
         Creates a new data set that contains the given sequence

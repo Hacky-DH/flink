@@ -141,6 +141,27 @@ class DataSet(object):
         self._env._sinks.append(child)
         return child_set
 
+    def to_db(self, sql, db_config):
+        """
+        Writes a DataSet to the table in a database by jdbc
+
+        :param sql: insert sql
+        :param db_config: a list or tuple, including string of drive, url, user, password
+        """
+        if not isinstance(db_config, (tuple, list)) or len(db_config) < 4:
+            raise TypeError("db_config must be tuple or list, and contains drive, url, user, password")
+        config = db_config.copy()
+        config.append(sql)
+        child = OperationInfo()
+        child_set = DataSink(self._env, child)
+        child.identifier = _Identifier.SINK_JDBC
+        child.parent = self._info
+        child.values = config
+        self._info.parallelism = child.parallelism
+        self._info.sinks.append(child)
+        self._env._sinks.append(child)
+        return child_set
+
     def reduce_group(self, operator, combinable=False):
         """
         Applies a GroupReduce transformation.
