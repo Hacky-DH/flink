@@ -14,6 +14,7 @@
 package org.apache.flink.python.api;
 
 import org.apache.flink.api.common.JobExecutionResult;
+import org.apache.flink.api.common.functions.MapFunction;
 import org.apache.flink.api.common.operators.Keys;
 import org.apache.flink.api.common.restartstrategy.RestartStrategies;
 import org.apache.flink.api.common.typeinfo.TypeInformation;
@@ -21,6 +22,8 @@ import org.apache.flink.api.java.DataSet;
 import org.apache.flink.api.java.ExecutionEnvironment;
 import org.apache.flink.api.java.io.PrintingOutputFormat;
 import org.apache.flink.api.java.io.TupleCsvInputFormat;
+import org.apache.flink.api.java.io.jdbc.JDBCInputFormat;
+import org.apache.flink.api.java.io.jdbc.JDBCOutputFormat;
 import org.apache.flink.api.java.operators.CoGroupRawOperator;
 import org.apache.flink.api.java.operators.CrossOperator.DefaultCross;
 import org.apache.flink.api.java.operators.SortedGrouping;
@@ -28,7 +31,9 @@ import org.apache.flink.api.java.operators.UdfOperator;
 import org.apache.flink.api.java.operators.UnsortedGrouping;
 import org.apache.flink.api.java.tuple.Tuple;
 import org.apache.flink.api.java.tuple.Tuple2;
+import org.apache.flink.api.java.typeutils.RowTypeInfo;
 import org.apache.flink.api.java.typeutils.TupleTypeInfo;
+import org.apache.flink.api.java.typeutils.TypeExtractor;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.configuration.GlobalConfiguration;
 import org.apache.flink.core.fs.FSDataOutputStream;
@@ -45,6 +50,7 @@ import org.apache.flink.python.api.functions.util.StringDeserializerMap;
 import org.apache.flink.python.api.functions.util.StringTupleDeserializerMap;
 import org.apache.flink.python.api.streaming.plan.PythonPlanStreamer;
 import org.apache.flink.python.api.util.SetCache;
+import org.apache.flink.types.Row;
 import org.apache.flink.util.FileUtils;
 import org.apache.flink.util.IOUtils;
 
@@ -293,7 +299,8 @@ public class PythonPlanBinder {
 	 * This enum contains the identifiers for all supported DataSet operations.
 	 */
 	protected enum Operation {
-		SOURCE_CSV, SOURCE_TEXT, SOURCE_VALUE, SOURCE_SEQ, SINK_CSV, SINK_TEXT, SINK_PRINT,
+		SOURCE_CSV, SOURCE_TEXT, SOURCE_VALUE, SOURCE_SEQ, SOURCE_JDBC,
+		SINK_CSV, SINK_TEXT, SINK_PRINT, SINK_JDBC,
 		SORT, UNION, FIRST, DISTINCT, GROUPBY,
 		REBALANCE, PARTITION_HASH,
 		BROADCAST,
@@ -318,6 +325,9 @@ public class PythonPlanBinder {
 				case SOURCE_SEQ:
 					createSequenceSource(env, info);
 					break;
+				case SOURCE_JDBC:
+					createJDBCSource(env, info);
+					break;
 				case SINK_CSV:
 					createCsvSink(info);
 					break;
@@ -326,6 +336,9 @@ public class PythonPlanBinder {
 					break;
 				case SINK_PRINT:
 					createPrintSink(info);
+					break;
+				case SINK_JDBC:
+					createJDBCSink(info);
 					break;
 				case BROADCAST:
 					createBroadcastVariable(info);
@@ -422,10 +435,45 @@ public class PythonPlanBinder {
 			.map(new SerializerMap<Long>()).setParallelism(info.parallelism).name("SequenceSourcePostStep"));
 	}
 
+	private void createJDBCSource(ExecutionEnvironment env, PythonOperationInfo info) {
+		if (info.values.size() < 6) {
+			throw new IllegalArgumentException("JDBC source need 6 arguments at least");
+		}
+		info.values.stream().forEach(v -> LOG.info("JDBC source params: " + v.toString()));
+		try {
+			Class.forName((String) info.values.get(0));
+		} catch (ClassNotFoundException e) {
+			throw new RuntimeException(e);
+		}
+		JDBCInputFormat input = JDBCInputFormat.buildJDBCInputFormat()
+			.setDrivername((String) info.values.get(0))
+			.setDBUrl((String) info.values.get(1))
+			.setUsername((String) info.values.get(2))
+			.setPassword((String) info.values.get(3))
+			.setQuery((String) info.values.get(4))
+			.setRowTypeInfo(extractTypeInfo((String) info.values.get(5)))
+			.finish();
+		sets.add(info.setID, env.createInput(input).setParallelism(info.parallelism).name(info.name)
+			.map((MapFunction<Row, Row>) s -> s).setParallelism(info.parallelism).name(info.name + "PostStep"));
+	}
+
+	private RowTypeInfo extractTypeInfo(String info) {
+		// type info string is split by comma ,
+		TypeInformation[] types = Arrays.stream(info.split(","))
+			.map(t -> {
+				try {
+					return TypeExtractor.getForClass(Class.forName(t));
+				} catch (ClassNotFoundException e) {
+					throw new RuntimeException(e);
+				}
+			}).toArray(size -> new TypeInformation[size]);
+		return new RowTypeInfo(types);
+	}
+
 	private void createCsvSink(PythonOperationInfo info) {
 		DataSet<byte[]> parent = sets.getDataSet(info.parentID);
 		parent.map(new StringTupleDeserializerMap()).setParallelism(info.parallelism).name("CsvSinkPreStep")
-				.writeAsCsv(info.path, info.lineDelimiter, info.fieldDelimiter, info.writeMode).setParallelism(info.parallelism).name("CsvSink");
+			.writeAsCsv(info.path, info.lineDelimiter, info.fieldDelimiter, info.writeMode).setParallelism(info.parallelism).name("CsvSink");
 	}
 
 	private void createTextSink(PythonOperationInfo info) {
@@ -438,6 +486,28 @@ public class PythonPlanBinder {
 		DataSet<byte[]> parent = sets.getDataSet(info.parentID);
 		parent.map(new StringDeserializerMap()).setParallelism(info.parallelism).name("PrintSinkPreStep")
 			.output(new PrintingOutputFormat<String>(info.toError)).setParallelism(info.parallelism);
+	}
+
+	private void createJDBCSink(PythonOperationInfo info) {
+		if (info.values.size() < 5) {
+			throw new IllegalArgumentException("JDBC sink need 5 arguments at least");
+		}
+		info.values.stream().forEach(v -> LOG.info("JDBC sink params: " + v.toString()));
+		try {
+			Class.forName((String) info.values.get(0));
+		} catch (ClassNotFoundException e) {
+			throw new RuntimeException(e);
+		}
+		DataSet<Row> parent = sets.getDataSet(info.parentID);
+		JDBCOutputFormat output = JDBCOutputFormat.buildJDBCOutputFormat()
+			.setDrivername((String) info.values.get(0))
+			.setDBUrl((String) info.values.get(1))
+			.setUsername((String) info.values.get(2))
+			.setPassword((String) info.values.get(3))
+			.setQuery((String) info.values.get(4))
+			.finish();
+		parent.map(s -> s).setParallelism(info.parallelism).name(info.name + "PreStep")
+			.output(output).setParallelism(info.parallelism).name(info.name);
 	}
 
 	private void createBroadcastVariable(PythonOperationInfo info) {
