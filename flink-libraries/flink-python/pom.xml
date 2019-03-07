@@ -77,8 +77,7 @@ under the License.
 						<configuration>
 							<artifactSet>
 								<includes>
-									<include>org.apache.flink:flink-jdbc*</include>
-									<include>ru.yandex.clickhouse:clickhouse-jdbc</include>
+									<include>*:*</include>
 								</includes>
 							</artifactSet>
 							<transformers>
@@ -165,7 +164,6 @@ under the License.
 			<groupId>ru.yandex.clickhouse</groupId>
 			<artifactId>clickhouse-jdbc</artifactId>
 			<version>0.1.50</version>
-			<classifier>shaded</classifier>
 		</dependency>
 
 		<!-- test dependencies -->
