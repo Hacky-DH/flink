@@ -177,7 +177,7 @@ class Environment(object):
         """
         if not isinstance(db_config, (tuple, list)) or len(db_config) < 4:
             raise TypeError("db_config must be tuple or list, and contains drive, url, user, password")
-        config = db_config.copy()
+        config = list(db_config).copy()
         config.append(query_sql)
         config.append(row_types)
         child = OperationInfo()

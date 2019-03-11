@@ -150,7 +150,7 @@ class DataSet(object):
         """
         if not isinstance(db_config, (tuple, list)) or len(db_config) < 4:
             raise TypeError("db_config must be tuple or list, and contains drive, url, user, password")
-        config = db_config.copy()
+        config = list(db_config).copy()
         config.append(sql)
         child = OperationInfo()
         child_set = DataSink(self._env, child)
