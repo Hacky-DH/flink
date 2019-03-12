@@ -114,3 +114,14 @@ class RowTypes(object):
     Date = "java.sql.Date"
     Time = "java.sql.Time"
     Timestamp = "java.sql.Timestamp"
+    Int8 = Byte
+    Int16 = Short
+    Int32 = Integer
+    Int64 = Long
+    UInt8 = Short
+    UInt16 = Character
+    UInt32 = Long
+    UInt64 = BigInteger
+    Float32 = Float
+    Float64 = Double
+    DateTime = Timestamp
