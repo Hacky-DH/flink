@@ -65,6 +65,7 @@ class Order(object):
     DESCENDING = 2
     ANY = 3
 
+
 import sys
 
 PY2 = sys.version_info[0] == 2
@@ -91,3 +92,25 @@ def _createKeyValueTypeInfo(keyCount):
 
 def _createArrayTypeInfo():
     return BYTES
+
+
+class RowTypes(object):
+    """
+    Types for JDBC row types
+
+    types map to java types
+    """
+    String = "java.lang.String"
+    Boolean = "java.lang.Boolean"
+    Byte = "java.lang.Byte"
+    Short = "java.lang.Short"
+    Integer = "java.lang.Integer"
+    Long = "java.lang.Long"
+    Float = "java.lang.Float"
+    Double = "java.lang.Double"
+    Character = "java.lang.Character"
+    BigInteger = "java.math.BigInteger"
+    BigDecimal = "java.math.BigDecimal"
+    Date = "java.sql.Date"
+    Time = "java.sql.Time"
+    Timestamp = "java.sql.Timestamp"
