@@ -453,8 +453,8 @@ public class PythonPlanBinder {
 			.setQuery((String) info.values.get(4))
 			.setRowTypeInfo(extractTypeInfo((String) info.values.get(5)))
 			.finish();
-		sets.add(info.setID, env.createInput(input).setParallelism(info.parallelism).name("JDBCSource")
-			.map((MapFunction<Row, Row>) s -> s).setParallelism(info.parallelism).name("JDBCSourcePostStep"));
+		sets.add(info.setID, env.createInput(input).setParallelism(info.parallelism).name(info.name)
+			.map((MapFunction<Row, Row>) s -> s).setParallelism(info.parallelism).name(info.name + "PostStep"));
 	}
 
 	private RowTypeInfo extractTypeInfo(String info) {
@@ -506,8 +506,8 @@ public class PythonPlanBinder {
 			.setPassword((String) info.values.get(3))
 			.setQuery((String) info.values.get(4))
 			.finish();
-		parent.map(s -> s).setParallelism(info.parallelism).name("JDBCSinkPreStep")
-			.output(output).setParallelism(info.parallelism).name("JDBCSink");
+		parent.map(s -> s).setParallelism(info.parallelism).name(info.name + "PreStep")
+			.output(output).setParallelism(info.parallelism).name(info.name);
 	}
 
 	private void createBroadcastVariable(PythonOperationInfo info) {
